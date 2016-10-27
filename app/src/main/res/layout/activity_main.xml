@@ -60,11 +60,12 @@
         android:layout_height="wrap_content"
         android:text="Address"
         android:id="@+id/lbl4"
-        android:layout_centerVertical="true"
-        android:layout_centerHorizontal="true" />
+        android:layout_below="@+id/txtTime"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="42dp" />
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:id="@+id/txtAddress"
         android:layout_below="@+id/lbl4"
@@ -76,7 +77,18 @@
         android:layout_height="wrap_content"
         android:text="Get Addr"
         android:id="@+id/btnAddr"
+        android:onClick="getAddress"
+        android:layout_above="@+id/txtAddress"
+        android:layout_alignParentEnd="true" />
+
+    <ProgressBar
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/progressBar"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
-        android:onClick="getAddress" />
+        android:layout_marginBottom="39dp"
+        android:indeterminate="false"
+        android:visibility="gone" />
 </RelativeLayout>

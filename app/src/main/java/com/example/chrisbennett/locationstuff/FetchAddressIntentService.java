@@ -19,36 +19,63 @@ import java.util.Locale;
 
 public class FetchAddressIntentService extends IntentService {
 
+    private static final String TAG = "FetchAddressIS";
     protected ResultReceiver receiver;
 
-    public FetchAddressIntentService(String name) {
-        super(name);
-
+    public FetchAddressIntentService() {
+        super(TAG);
     }
+
+    @Override
     protected void onHandleIntent(Intent intent) {
-        Geocoder geocoder = new Geocoder(this, Locale.getDefault());
         String errorMessage = "";
 
+        receiver = intent.getParcelableExtra(Constants.RECEIVER);
+
+        // Check if receiver was properly registered.
+        if(receiver == null) {
+            Log.wtf(TAG, "No receiver receieved. There is nowhere to send results. Sad face.");
+            return;
+        }
+
         // Get the location passed to this service through an extra.
-        Location location = intent.getParcelableExtra(
-                Constants.LOCATION_DATA_EXTRA);
+        Location location = intent.getParcelableExtra(Constants.LOCATION_DATA_EXTRA);
 
 
+        // Make sure that the location data was really sent over through an extra. If it wasn't,
+        // send an error error message and return.
+        if(location == null) {
+            Log.wtf(TAG, "don't you know I'm loco?!?");
+            deliverResultToReceiver(Constants.FAILURE_RESULT,"don't you know I'm loco?!?");
+            return;
+        }
+
+
+        // Errors could still arise from using the Geocoder (for example, if there is no
+        // connectivity, or if the Geocoder is given illegal location data). Or, the Geocoder may
+        // simply not have an address for a location. In all these cases, we communicate with the
+        // receiver using a resultCode indicating failure. If an address is found, we use a
+        // resultCode indicating success.
+
+        // The Geocoder used in this sample. The Geocoder's responses are localized for the given
+        // Locale, which represents a specific geographical or linguistic region. Locales are used
+        // to alter the presentation of information such as numbers or dates to suit the conventions
+        // in the region they describe.
+
+        Geocoder geocoder = new Geocoder(this, Locale.getDefault());
 
         List<Address> addresses = null;
 
         try {
-            addresses = geocoder.getFromLocation(
-                    location.getLatitude(),
-                    location.getLongitude(),
+            addresses = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(),
                     // In this sample, get just a single address.
                     1);
         } catch (IOException ioException) {
             // Catch network or other I/O problems.
-            Log.e("err", "io issue", ioException);
+            Log.e(TAG, "io issue", ioException);
         } catch (IllegalArgumentException illegalArgumentException) {
             // Catch invalid latitude or longitude values.
-            Log.e("err",  "bad lat/lon: " +
+            Log.e(TAG,  "bad lat/lon: " +
                     "Latitude = " + location.getLatitude() +
                     ", Longitude = " +
                     location.getLongitude(), illegalArgumentException);
@@ -57,9 +84,9 @@ public class FetchAddressIntentService extends IntentService {
         // Handle case where no address was found.
         if (addresses == null || addresses.size()  == 0) {
             if (errorMessage.isEmpty()) {
-                Log.e("err",  "no address found");
+                Log.e(TAG,  "no address found");
             }
-            deliverResultToReceiver(Constants.FAILURE_RESULT, errorMessage);
+            deliverResultToReceiver(Constants.FAILURE_RESULT, "no address found");
         } else {
             Address address = addresses.get(0);
             ArrayList<String> addressFragments = new ArrayList<String>();
@@ -69,7 +96,7 @@ public class FetchAddressIntentService extends IntentService {
             for(int i = 0; i < address.getMaxAddressLineIndex(); i++) {
                 addressFragments.add(address.getAddressLine(i));
             }
-            Log.i("yay", "found address!");
+            Log.i(TAG, "found address!");
             deliverResultToReceiver(Constants.SUCCESS_RESULT, TextUtils.join(System.getProperty("line.separator"), addressFragments));
         }
     }

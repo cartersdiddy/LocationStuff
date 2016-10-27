@@ -12,6 +12,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,41 +44,57 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
     String address;
     boolean requesting;
     boolean mAddressRequested;
-    String REQUESTING_LOCATION_UPDATES_KEY = "req_key";
-    String LOCATION_KEY = "loc_key";
-    String LAST_UPDATED_TIME_STRING_KEY = "time_key";
     private AddressResultReceiver mResultReceiver;
+
+    protected static final String REQUESTING_LOCATION_UPDATES_KEY = "req_key";
+    protected static final String LOCATION_KEY = "loc_key";
+    protected static final String LAST_UPDATED_TIME_STRING_KEY = "time_key";
+    protected static final String LOCATION_ADDRESS_KEY = "addr_key";
+
+    ProgressBar progBar;
+    Button button;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        if (client == null) {
+        mAddressRequested = false;
+        address = "";
+
+        updateValuesFromBundle(savedInstanceState);
+        //updateUI();
+
+        progBar = (ProgressBar) findViewById(R.id.progressBar);
+        button = (Button) findViewById(R.id.btnAddr);
+        //createLocationRequest();
+        makeClient();
+        mResultReceiver = new AddressResultReceiver(new Handler());
+        Log.v("create","got through create");
+    }
+
+    protected synchronized void makeClient() {
+        if(client == null) {
             client = new GoogleApiClient.Builder(this)
                     .addConnectionCallbacks(this)
                     .addOnConnectionFailedListener(this)
                     .addApi(LocationServices.API)
                     .build();
         }
-
-        mResultReceiver = new AddressResultReceiver(new Handler());
-        createLocationRequest();
-        updateValuesFromBundle(savedInstanceState);
-
     }
 
     @Override
     protected void onStart() {
-        client.connect();
         super.onStart();
-
+        client.connect();
     }
 
     @Override
     protected void onStop() {
-        client.disconnect();
         super.onStop();
+        if(client.isConnected()) {
+            client.disconnect();
+        }
     }
     @Override
     protected void onPause() {
@@ -97,6 +115,8 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
                 requesting);
         savedInstanceState.putParcelable(LOCATION_KEY, loc);
         savedInstanceState.putString(LAST_UPDATED_TIME_STRING_KEY, dateTime);
+        savedInstanceState.putString(LOCATION_ADDRESS_KEY, address);
+
         super.onSaveInstanceState(savedInstanceState);
     }
 
@@ -111,23 +131,18 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
         }
         if(loc != null) {
 
-            updateUI();
-
+            if(!Geocoder.isPresent()) {
+                Toast.makeText(this,"No address resolution available",Toast.LENGTH_LONG).show();
+                return;
+            }
+/*
             if(requesting) {
                 startLocationUpdates();
             }
+*/
 
-            if (loc != null) {
-                // Determine whether a Geocoder is available.
-                if (!Geocoder.isPresent()) {
-                    Toast.makeText(this, "no geocoder",
-                            Toast.LENGTH_LONG).show();
-                    return;
-                }
-
-                if (mAddressRequested) {
-                    startIntentService();
-                }
+            if (mAddressRequested) {
+                startIntentService();
             }
         }
     }
@@ -135,12 +150,13 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
     @Override
     public void onConnectionSuspended(int x) {
-
+        Log.i("loc", "Connection suspended");
+        client.connect();
     }
 
     @Override
     public void onConnectionFailed(ConnectionResult result) {
-
+        Log.i("loc", "Connection failed: ConnectionResult.getErrorCode() = " + result.getErrorCode());
     }
 
 
@@ -155,6 +171,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
             PRIORITY_NO_POWER
         */
         request.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+
 
     }
 
@@ -183,16 +200,24 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
         TextView lat = (TextView) findViewById(R.id.txtLat);
         TextView lon = (TextView) findViewById(R.id.txtLon);
         TextView alt = (TextView) findViewById(R.id.txtTime);
+        TextView addr = (TextView) findViewById(R.id.txtAddress);
 
-        lat.setText(String.valueOf(loc.getLatitude()));
-        lon.setText(String.valueOf(loc.getLongitude()));
-        dateTime = DateFormat.getDateTimeInstance().format(new Date());
-        alt.setText(dateTime);
-    }
+        if(loc!=null) {
+            lat.setText(String.valueOf(loc.getLatitude()));
+            lon.setText(String.valueOf(loc.getLongitude()));
+            dateTime = DateFormat.getDateTimeInstance().format(new Date());
+            alt.setText(dateTime);
+        }
+        if (mAddressRequested) {
+            progBar.setVisibility(ProgressBar.VISIBLE);
+            button.setEnabled(false);
 
-    protected void displayAddressOutput() {
-        TextView addr = (TextView) findViewById(R.id.txtTime);
-        addr.setText(address);
+        }
+        else {
+            progBar.setVisibility(ProgressBar.GONE);
+            button.setEnabled(true);
+            addr.setText(address);
+        }
     }
 
     private void updateValuesFromBundle(Bundle savedInstanceState) {
@@ -212,7 +237,9 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
                 // mCurrentLocationis not null.
                 loc = savedInstanceState.getParcelable(LOCATION_KEY);
             }
-
+            if(savedInstanceState.keySet().contains(LOCATION_ADDRESS_KEY)) {
+                address = savedInstanceState.getParcelable(LOCATION_ADDRESS_KEY);
+            }
             // Update the value of mLastUpdateTime from the Bundle and update the UI.
             if (savedInstanceState.keySet().contains(LAST_UPDATED_TIME_STRING_KEY)) {
                 dateTime = savedInstanceState.getString(
@@ -259,12 +286,15 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
             // Display the address string
             // or an error message sent from the intent service.
             address = resultData.getString(FetchAddressIntentService.Constants.RESULT_DATA_KEY);
-            displayAddressOutput();
+            updateUI();
 
             // Show a toast message if an address was found.
             if (resultCode == FetchAddressIntentService.Constants.SUCCESS_RESULT) {
-                Toast.makeText(getApplicationContext(), "found address!",Toast.LENGTH_SHORT);
+                Toast.makeText(getApplicationContext(), "found address!",Toast.LENGTH_SHORT).show();
             }
+
+            mAddressRequested = false;
+            updateUI();
 
         }
     }
